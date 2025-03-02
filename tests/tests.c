@@ -107,7 +107,7 @@ int main() {
 	printf("Анализ утечек памяти..\n");
     test_memory_leak();
 	sleep(1);
-	printf("Тестирование вычисления выражения\n");
+	printf("Тестирование вычисления выражения..\n");
 	test_compute_expression();
 	sleep(1);
     printf("Все тесты пройдены!\n");

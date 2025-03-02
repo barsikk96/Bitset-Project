@@ -11,8 +11,10 @@ BitSet bitset_create(size_t capacity) {
 
 // Освобождает память, занятую битовым множеством
 void bitset_destroy(BitSet* set) {
-    free(set->bits); // Освобождаем выделенную память
-    set->bits = NULL;
+    if (set->bits) {
+        free(set->bits);
+        set->bits = NULL;
+    }
     set->size = 0;
     set->capacity = 0;
 }
@@ -40,9 +42,7 @@ bool bitset_contains(const BitSet* set, int element) {
 size_t count_num_bitset(BitSet* set) {
     size_t count = 0;
     for (size_t i = 0; i < set->capacity; i++) {
-        if (set->bits[i >> 6] & (1ULL << (i % 64))) { // Проверяем каждый бит во всех блоках
-            count++;
-        }
+    	count += __builtin_popcountll(set->bits[i]);
     }
     return count;
 }
@@ -66,10 +66,13 @@ void enabling_bitset(BitSet* set1, BitSet* set2) {
 // Объединяет два множества (set1 |= set2)
 void bitset_union(BitSet* set1, const BitSet* set2) {
     int flag = 0;
+    uint64_t* temp_bits = set1->bits; // Сохраняем старое значение указателя
+
     if (set1->size < set2->size) {
         set1->bits = (uint64_t*)realloc(set1->bits, set2->size * sizeof(uint64_t)); // Расширяем массив
         if (set1->bits == NULL) {
             perror("Не удалось выделить память для set1");
+            set1->bits = temp_bits; // Восстанавливаем старый указатель
             flag = 1;
         }
         if (flag == 0) {
@@ -114,22 +117,25 @@ void bitset_symmetric_difference(BitSet* set1, const BitSet* set2) {
 
 // Дополнение множества относительно универсального множества
 void bitset_complement(BitSet* set, const BitSet* universe) {
-    for (size_t i = 0; i < universe->size; i++) {
-        if (i < set->size) {
-            set->bits[i] = ~set->bits[i] & universe->bits[i]; // Инвертируем set и ограничиваем universe
-        } else {
-            uint64_t new_block = ~0ULL & universe->bits[i]; // Заполняем недостающие блоки
-            set->bits = (uint64_t*)realloc(set->bits, (i + 1) * sizeof(uint64_t)); // Расширяем массив
-            set->size = i + 1;
-            set->capacity = universe->capacity;
-            set->bits[i] = new_block;
+	char flag_error = 0;
+	if (set->size < universe->size) {
+        uint64_t* new_bits = (uint64_t*)realloc(set->bits, universe->size * sizeof(uint64_t));
+        if (new_bits == NULL) {
+            perror("Ошибка выделения памяти в bitset_complement");
+            flag_error = 1;
         }
+		if(flag_error == 0) {
+        	set->bits = new_bits;
+        	memset(set->bits + set->size, 0, (universe->size - set->size) * sizeof(uint64_t));
+        	set->size = universe->size;
+		}
     }
-    for (size_t i = universe->size; i < set->size; i++) {
-        set->bits[i] = 0; // Очищаем лишние элементы
+    for (size_t i = 0; i < universe->size && flag_error == 0; i++) {
+        set->bits[i] = ~set->bits[i] & universe->bits[i];
     }
 }
 
+// Решение выражения
 BitSet compute_expression(const BitSet* A, const BitSet* B, const BitSet* C, const BitSet* D, const BitSet* universe) {
     BitSet result = bitset_create(A->capacity); // Создаем пустое множество result с той же вместимостью, что и множество A
 
